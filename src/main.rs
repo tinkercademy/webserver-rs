@@ -4,11 +4,18 @@ use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 
 /// Write text to a stream. (HTTP)
-fn write_txt(txt: &str, mut stream: &TcpStream) -> Result<usize, io::Error>{
-    let response = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
+/// Pretty naive
+/// # Arguments
+/// * `stream` - The stream to write to.
+/// * `text` - The text to write.
+/// # Returns
+/// * `Ok(usize)` - The number of bytes written.
+/// * `Err(io::Error)` - The error.
+fn write_txt(txt: &str, stream: &mut TcpStream) -> Result<usize, io::Error>{
+    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nServer: demo-rust-http-server/0.1.0\r\n\r\n{}",
                            txt.len(), txt);
     let written = stream.write(response.as_bytes());
-    stream.flush().unwrap();
+    stream.flush().unwrap(); // probably should not unwrap but whatever
     written
 }
 
@@ -28,10 +35,25 @@ fn handle_connection(mut stream: TcpStream) {
             }
         }
     }
-    println!("Req: {:?}", req);
+    match req.path {
+        Some(ref path) => {
+            if path == &"/" {
+                let txt = std::fs::read_to_string("pages/index.html").unwrap();
+                let _ = write_txt(&txt, &mut stream);
+            } else {
+                let txt = std::fs::read_to_string("pages/404.html").unwrap();
+                let _ = write_txt(&txt, &mut stream);
+            }
+        },
+        None => {
+            let txt = "No path";
+            let _ = write_txt(txt, &mut stream);
+        }
+    }
+    // println!("Req: {:?}", req);
 
-    let contents = "Hello from rust";
-    let _ = write_txt(contents, &stream);
+    // let contents = std::fs::read_to_string("pages/index.html").unwrap();
+    // let _ = write_txt(&contents, &mut stream);
 }
 
 fn main() -> std::io::Result<()> {
@@ -39,7 +61,6 @@ fn main() -> std::io::Result<()> {
     println!("Listening on port 8080");
     for stream in listener.incoming() {
         let stream = stream?;
-        println!("Connection established!");
         handle_connection(stream);
     }
     Ok(())
